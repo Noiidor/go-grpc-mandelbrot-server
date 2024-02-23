@@ -2,6 +2,7 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
