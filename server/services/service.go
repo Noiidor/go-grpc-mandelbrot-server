@@ -5,14 +5,20 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"image/color/palette"
 	"image/draw"
 	"image/png"
 	"log"
+	"math"
 	"math/cmplx"
 	"sync"
 
 	pb "github.com/Noiidor/go-grpc-mandelbrot/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+var (
+	maxIters = 1000
 )
 
 type MandelbrotServer struct {
@@ -38,47 +44,47 @@ func generateMandelbrot(width, height int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{0, 0}, draw.Src)
 
-	yStep := 1.0 / float64(img.Bounds().Dy())
-	xStep := 1.0 / float64(img.Bounds().Dx())
-
-	xOffset := float64(img.Bounds().Dx()) / 1.5
-	yOffset := float64(img.Bounds().Dy()) / 2
-
-	scaleModifier := float64(img.Bounds().Dy()) / 2
+	ratio := width / height
 
 	var wg sync.WaitGroup
 
-	for i := float64(-1.0); i < 1; i += yStep {
+	for px := range width {
 		wg.Add(1)
-		go func(iCaptured float64) {
+		go func(px int) {
 			defer wg.Done()
+		yLabel:
+			for py := range height {
 
-		xLabel:
-			for j := float64(-2); j < 1; j += xStep {
+				x := ((float64((2 * px)) / float64(width)) - 1) * float64(ratio)
+				y := ((float64((2 * py)) / float64(height)) - 1)
+
 				var z complex128
-				c := complex(j, iCaptured)
+				c := complex(x, y)
 
-				iterCount := 0
-
-				x, y := transformIntoImgCoords(j, iCaptured, xOffset, yOffset, scaleModifier)
-
-				for k := 0; k <= 40; k++ {
+				for n := range maxIters {
 					z = z*z + c
-					iterCount++
+
 					if cmplx.Abs(z) > 2 {
 
-						color := color.RGBA{uint8(255 - 5*iterCount), uint8(255 - 5*iterCount), uint8(255 - 5*iterCount), 255}
+						// ugly
+						log_zn := cmplx.Log(z*z) / 2
+						nu := cmplx.Log(log_zn/cmplx.Log((2))) / cmplx.Log(2)
 
-						img.Set(x, y, color)
+						color1 := palette.Plan9[int(math.Min(float64(255), float64(n)))]
 
-						continue xLabel
+						color2 := palette.Plan9[int(math.Min(float64(255), float64(n+1)))]
+
+						nRatio := (real(nu) + imag(nu)) - (math.Floor(real(nu) + imag(nu)))
+
+						color := InterpolateColors(color1.(color.RGBA), color2.(color.RGBA), nRatio)
+						img.Set(px, py, color)
+
+						continue yLabel
 					}
-
 				}
-
-				img.Set(x, y, color.Black)
 			}
-		}(i)
+
+		}(px)
 	}
 
 	wg.Wait()
@@ -86,13 +92,18 @@ func generateMandelbrot(width, height int) image.Image {
 	return img
 }
 
-func transformIntoImgCoords(xFloat, yFloat, xOffset, yOffset, scaleModifier float64) (x, y int) {
+func InterpolateColors(color1, color2 color.RGBA, ratio float64) color.RGBA {
+	if ratio <= 0 {
+		return color1
+	} else if ratio >= 1 {
+		return color2
+	}
 
-	xFloat *= scaleModifier
-	yFloat *= scaleModifier
+	// Interpolate each color component separately
+	red := uint8(float64(color1.R) + ratio*(float64(color2.R)-float64(color1.R)))
+	green := uint8(float64(color1.G) + ratio*(float64(color2.G)-float64(color1.G)))
+	blue := uint8(float64(color1.B) + ratio*(float64(color2.B)-float64(color1.B)))
+	alpha := uint8(float64(color1.A) + ratio*(float64(color2.A)-float64(color1.A)))
 
-	xFloat += xOffset
-	yFloat += yOffset
-
-	return int(xFloat), int(yFloat)
+	return color.RGBA{red, green, blue, alpha}
 }
