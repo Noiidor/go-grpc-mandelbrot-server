@@ -30,10 +30,6 @@ func NewMandelbrotServer() *MandelbrotServer {
 	return &MandelbrotServer{}
 }
 
-// type Pixel struct {
-// 	x, y int
-// }
-
 type SafeMap struct {
 	m  map[int]int
 	mx sync.Mutex
@@ -75,9 +71,9 @@ func generateMandelbrot(width, height int) image.Image {
 	ratio := width / height
 
 	//itersForPixel := make(map[Pixel]int, width*height)
-	itersForPixel := make([][]int, width)
+	itersForPixel := make([][]float64, width)
 	for i := range itersForPixel {
-		itersForPixel[i] = make([]int, height)
+		itersForPixel[i] = make([]float64, height)
 	}
 
 	histogram := NewSafeMap(maxIters)
@@ -97,24 +93,11 @@ func generateMandelbrot(width, height int) image.Image {
 
 				itersForPixel[px][py] = iters
 
-				if iters < maxIters {
+				if iters < float64(maxIters) {
 					histogram.mx.Lock()
-					if _, ok := histogram.m[iters]; !ok {
-						histogram.m[iters] = 0
-					}
-					histogram.m[iters]++
+					histogram.m[int(math.Floor(iters))]++
 					histogram.mx.Unlock()
 				}
-
-				// var pixelColor color.Color
-				// if iters == 0 {
-				// 	pixelColor = color.Black
-				// } else {
-				// 	colorHue := uint8(iters)
-				// 	pixelColor = color.RGBA{colorHue, colorHue, colorHue, 255}
-				// }
-
-				// img.Set(px, py, pixelColor)
 			}
 
 		}(px)
@@ -130,86 +113,26 @@ func generateMandelbrot(width, height int) image.Image {
 	hues := make([]float64, maxIters)
 	h := 0.0
 	for n := range maxIters {
-		h += float64(histogram.m[n]) / float64(total)
-		hues[n] = h
+		h += (float64(histogram.m[n]) / float64(total))
+		hues[n] = 1 - h
 	}
-
-	//highestIteration := highestValue(itersForPixel)
-
-	//make pallete for number of max iterations
-	randPalette := createRandPalette(maxIters)
-
-	//NumIterationsPerPixel := make([]int, highestIteration+1)
-
-	// for _, column := range itersForPixel {
-	// 	for _, cell := range column {
-	// 		NumIterationsPerPixel[cell]++
-	// 	}
-	// }
-
-	// total := 0
-	// for _, v := range NumIterationsPerPixel {
-	// 	total += v
-	// }
-	// for n := range highestIteration {
-	// 	total += NumIterationsPerPixel[n]
-	// }
-
-	// hue := make([][]float64, width)
-	// for i := range hue {
-	// 	hue[i] = make([]float64, height)
-	// }
-
-	// for x, column := range itersForPixel {
-	// 	for y, cell := range column {
-	// 		for n := range cell {
-	// 			hue[x][y] += float64(NumIterationsPerPixel[n]) / float64(total)
-	// 		}
-	// 	}
-	// }
-
-	// for x, column := range itersForPixel {
-	// 	for y := range column {
-	// 		hueTotal := int(math.Round(hue[x][y]))
-	// 		if hueTotal >= 1 {
-	// 			log.Printf("huetotal: %v", hueTotal)
-	// 		}
-	// 		color := randPalette[hueTotal]
-	// 		img.Set(x, y, color)
-	// 	}
-	// }
+	hues[len(hues)-1] = h
 
 	for x, column := range itersForPixel {
 		for y := range column {
 
 			m := itersForPixel[x][y]
-
-			color := randPalette[int(math.Round(hues[m]))]
+			num := 255 - int(255*linearInterpolation(hues[int(math.Floor(m))], hues[int(math.Ceil(m))], m-float64(math.Floor(m))))
+			color := color.RGBA{uint8(num), uint8(num), uint8(num), 255}
 			img.Set(x, y, color)
 		}
 	}
 
-	// for k, v := range iterationCounts.m {
-	// 	for i := range v {
-
-	// 		if _, ok := hue[k]; !ok {
-	// 			hue[k] = 0
-	// 		}
-	// 		added := float64(NumIterationsPerPixel[i]) / float64(total)
-	// 		//log.Printf("added value: %v", added)
-	// 		hue[k] += added
-	// 	}
-	// 	colorIndex := 0
-	// 	if iColor, ok := hue[k]; ok {
-	// 		colorIndex = int(iColor)
-	// 	}
-	// 	//log.Printf("color index: %v", colorIndex)
-	// 	color := randPalette[colorIndex]
-	// 	img.Set(k.x, k.y, color)
-
-	// }
-
 	return img
+}
+
+func linearInterpolation(a, b, t float64) float64 {
+	return a*(1-t) + b*t
 }
 
 func createRandPalette(colors int) color.Palette {
@@ -236,7 +159,7 @@ func highestValue(slice [][]int) int {
 	return max
 }
 
-func iteratePoint(x, y float64) int {
+func iteratePoint(x, y float64) float64 {
 	var z complex128
 	c := complex(x, y)
 
@@ -244,7 +167,8 @@ func iteratePoint(x, y float64) int {
 		z = z*z + c
 
 		if cmplx.Abs(z) > 2 {
-			return n
+			result := float64(n) + 1.0 - math.Log(math.Log2(cmplx.Abs(z)))
+			return result
 		}
 	}
 	return 0
