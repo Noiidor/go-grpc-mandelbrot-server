@@ -1,4 +1,4 @@
-module go-grpc-mandlebrot
+module go-grpc-mandlebrot-server
 
 go 1.22.0
 

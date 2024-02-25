@@ -5,51 +5,82 @@ import (
 	"context"
 	"image"
 	"image/color"
-	"image/color/palette"
 	"image/draw"
 	"image/png"
 	"log"
 	"math"
 	"math/cmplx"
+	"math/rand"
 	"sync"
 
-	"go-grpc-mandlebrot/internal/proto"
+	pb "go-grpc-mandlebrot-server/internal/proto"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var maxIterations = 1000
+var (
+	maxIters = 1000
+)
 
 type MandelbrotServer struct {
-	proto.UnimplementedMandelbrotServer
+	pb.UnimplementedMandelbrotServer
 }
 
 func NewMandelbrotServer() *MandelbrotServer {
 	return &MandelbrotServer{}
 }
 
-func (ms MandelbrotServer) GetImage(_ context.Context, emt *emptypb.Empty) (*proto.Image, error) {
+// type Pixel struct {
+// 	x, y int
+// }
+
+type SafeMap struct {
+	m  map[int]int
+	mx sync.Mutex
+}
+
+func NewSafeMap(size int) *SafeMap {
+	if size == 0 {
+		return &SafeMap{
+			m: make(map[int]int),
+		}
+	} else {
+		return &SafeMap{
+			m: make(map[int]int, size),
+		}
+	}
+}
+
+// }
+
+func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.Image, error) {
+
 	var imgBuffer bytes.Buffer
 
-	if err := png.Encode(&imgBuffer, ms.generateMandelbrot(1500, 750)); err != nil {
-		log.Fatalf("error while encoding image: %v", err)
+	img := generateMandelbrot(1500, 750)
+
+	err := png.Encode(&imgBuffer, img)
+	if err != nil {
+		log.Fatalf("Error while encoding image: %v", err)
 		return nil, err
 	}
 
-	return &proto.Image{ImageContent: imgBuffer.Bytes()}, nil
+	return &pb.Image{ImageContent: imgBuffer.Bytes()}, nil
 }
 
-func (MandelbrotServer) generateMandelbrot(width, height int) image.Image {
+func generateMandelbrot(width, height int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	draw.Draw(
-		img,
-		img.Bounds(),
-		&image.Uniform{C: color.White},
-		image.Point{},
-		draw.Src,
-	)
+	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{0, 0}, draw.Src)
 
 	ratio := width / height
+
+	//itersForPixel := make(map[Pixel]int, width*height)
+	itersForPixel := make([][]int, width)
+	for i := range itersForPixel {
+		itersForPixel[i] = make([]int, height)
+	}
+
+	histogram := NewSafeMap(maxIters)
 
 	var wg sync.WaitGroup
 
@@ -57,36 +88,33 @@ func (MandelbrotServer) generateMandelbrot(width, height int) image.Image {
 		wg.Add(1)
 		go func(px int) {
 			defer wg.Done()
-		yLabel:
 			for py := range height {
 
-				x := ((float64(2*px) / float64(width)) - 1) * float64(ratio)
-				y := (float64(2*py) / float64(height)) - 1
+				x := ((float64((2 * px)) / float64(width)) - 1) * float64(ratio)
+				y := ((float64((2 * py)) / float64(height)) - 1)
 
-				var z complex128
-				c := complex(x, y)
+				iters := iteratePoint(x, y)
 
-				for n := range maxIterations {
-					z = z*z + c
+				itersForPixel[px][py] = iters
 
-					if cmplx.Abs(z) > 2 {
-
-						// ugly
-						logZn := cmplx.Log(z*z) / 2
-						nu := cmplx.Log(logZn/cmplx.Log(2)) / cmplx.Log(2)
-
-						color1 := palette.Plan9[int(math.Min(float64(255), float64(n)))]
-
-						color2 := palette.Plan9[int(math.Min(float64(255), float64(n+1)))]
-
-						nRatio := (real(nu) + imag(nu)) - (math.Floor(real(nu) + imag(nu)))
-
-						color := InterpolateColors(color1.(color.RGBA), color2.(color.RGBA), nRatio)
-						img.Set(px, py, color)
-
-						continue yLabel
+				if iters < maxIters {
+					histogram.mx.Lock()
+					if _, ok := histogram.m[iters]; !ok {
+						histogram.m[iters] = 0
 					}
+					histogram.m[iters]++
+					histogram.mx.Unlock()
 				}
+
+				// var pixelColor color.Color
+				// if iters == 0 {
+				// 	pixelColor = color.Black
+				// } else {
+				// 	colorHue := uint8(iters)
+				// 	pixelColor = color.RGBA{colorHue, colorHue, colorHue, 255}
+				// }
+
+				// img.Set(px, py, pixelColor)
 			}
 
 		}(px)
@@ -94,21 +122,130 @@ func (MandelbrotServer) generateMandelbrot(width, height int) image.Image {
 
 	wg.Wait()
 
+	total := 0
+	for _, v := range histogram.m {
+		total += v
+	}
+
+	hues := make([]float64, maxIters)
+	h := 0.0
+	for n := range maxIters {
+		h += float64(histogram.m[n]) / float64(total)
+		hues[n] = h
+	}
+
+	//highestIteration := highestValue(itersForPixel)
+
+	//make pallete for number of max iterations
+	randPalette := createRandPalette(maxIters)
+
+	//NumIterationsPerPixel := make([]int, highestIteration+1)
+
+	// for _, column := range itersForPixel {
+	// 	for _, cell := range column {
+	// 		NumIterationsPerPixel[cell]++
+	// 	}
+	// }
+
+	// total := 0
+	// for _, v := range NumIterationsPerPixel {
+	// 	total += v
+	// }
+	// for n := range highestIteration {
+	// 	total += NumIterationsPerPixel[n]
+	// }
+
+	// hue := make([][]float64, width)
+	// for i := range hue {
+	// 	hue[i] = make([]float64, height)
+	// }
+
+	// for x, column := range itersForPixel {
+	// 	for y, cell := range column {
+	// 		for n := range cell {
+	// 			hue[x][y] += float64(NumIterationsPerPixel[n]) / float64(total)
+	// 		}
+	// 	}
+	// }
+
+	// for x, column := range itersForPixel {
+	// 	for y := range column {
+	// 		hueTotal := int(math.Round(hue[x][y]))
+	// 		if hueTotal >= 1 {
+	// 			log.Printf("huetotal: %v", hueTotal)
+	// 		}
+	// 		color := randPalette[hueTotal]
+	// 		img.Set(x, y, color)
+	// 	}
+	// }
+
+	for x, column := range itersForPixel {
+		for y := range column {
+
+			m := itersForPixel[x][y]
+
+			color := randPalette[int(math.Round(hues[m]))]
+			img.Set(x, y, color)
+		}
+	}
+
+	// for k, v := range iterationCounts.m {
+	// 	for i := range v {
+
+	// 		if _, ok := hue[k]; !ok {
+	// 			hue[k] = 0
+	// 		}
+	// 		added := float64(NumIterationsPerPixel[i]) / float64(total)
+	// 		//log.Printf("added value: %v", added)
+	// 		hue[k] += added
+	// 	}
+	// 	colorIndex := 0
+	// 	if iColor, ok := hue[k]; ok {
+	// 		colorIndex = int(iColor)
+	// 	}
+	// 	//log.Printf("color index: %v", colorIndex)
+	// 	color := randPalette[colorIndex]
+	// 	img.Set(k.x, k.y, color)
+
+	// }
+
 	return img
 }
 
-func InterpolateColors(color1, color2 color.RGBA, ratio float64) color.RGBA {
-	if ratio <= 0 {
-		return color1
-	} else if ratio >= 1 {
-		return color2
+func createRandPalette(colors int) color.Palette {
+	palette := make(color.Palette, colors)
+
+	for n := range colors {
+		color := color.RGBA{uint8(rand.Intn(255)), uint8(rand.Intn(255)), uint8(rand.Intn(255)), 255}
+		palette[n] = color
 	}
 
-	// Interpolate each color component separately
-	red := uint8(float64(color1.R) + ratio*(float64(color2.R)-float64(color1.R)))
-	green := uint8(float64(color1.G) + ratio*(float64(color2.G)-float64(color1.G)))
-	blue := uint8(float64(color1.B) + ratio*(float64(color2.B)-float64(color1.B)))
-	alpha := uint8(float64(color1.A) + ratio*(float64(color2.A)-float64(color1.A)))
+	return palette
+}
 
-	return color.RGBA{R: red, G: green, B: blue, A: alpha}
+func highestValue(slice [][]int) int {
+	max := 0
+	for _, column := range slice {
+		for _, cell := range column {
+			if cell > max {
+				max = cell
+			}
+		}
+	}
+
+	return max
+}
+
+func iteratePoint(x, y float64) int {
+	var z complex128
+	c := complex(x, y)
+
+	for n := range maxIters {
+		z = z*z + c
+
+		if cmplx.Abs(z) > 2 {
+			return n
+		}
+	}
+	return 0
 }

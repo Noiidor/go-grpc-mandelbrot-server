@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 
-option go_package= "go-grpc-mandlebrot/proto";
+option go_package= "go-grpc-mandlebrot-server/proto";
 
 service Mandelbrot {
   rpc GetImage (google.protobuf.Empty) returns (Image);

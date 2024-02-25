@@ -1,11 +1,11 @@
 package main
 
 import (
-	"go-grpc-mandlebrot/internal/config"
-	"go-grpc-mandlebrot/internal/proto"
-	"go-grpc-mandlebrot/internal/server"
-	"go-grpc-mandlebrot/pkg/mandelbrot"
-	"go-grpc-mandlebrot/pkg/signal"
+	"go-grpc-mandlebrot-server/internal/config"
+	"go-grpc-mandlebrot-server/internal/proto"
+	"go-grpc-mandlebrot-server/internal/server"
+	"go-grpc-mandlebrot-server/pkg/mandelbrot"
+	"go-grpc-mandlebrot-server/pkg/signal"
 	"log"
 
 	"google.golang.org/grpc"
