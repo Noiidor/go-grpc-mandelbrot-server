@@ -13,12 +13,12 @@ import (
 	"math/cmplx"
 	"sync"
 
-	"go-grpc-mandlebrot/pkg/proto"
+	"go-grpc-mandlebrot/internal/proto"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const maxIterations = 1000
+var maxIterations = 1000
 
 type MandelbrotServer struct {
 	proto.UnimplementedMandelbrotServer

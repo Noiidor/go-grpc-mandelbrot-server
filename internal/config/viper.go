@@ -2,10 +2,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"log"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 type ViperConfig struct {
