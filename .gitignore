@@ -10,6 +10,8 @@
 !.vscode/extensions.json
 !.vscode/*.code-snippets
 
+.idea
+
 # Local History for Visual Studio Code
 .history/
 
@@ -35,3 +37,5 @@
 # Go workspace file
 go.work
 go.work.sum
+
+config.yaml

@@ -1,0 +1,3 @@
+GRPC:
+  network: tcp
+  address: localhost:9000
