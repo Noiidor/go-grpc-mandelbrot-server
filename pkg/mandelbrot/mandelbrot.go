@@ -8,7 +8,6 @@ import (
 	"image/draw"
 	"image/png"
 	"log"
-	"math"
 	"math/cmplx"
 	"math/rand"
 	"sync"
@@ -19,7 +18,7 @@ import (
 )
 
 var (
-	maxIters = 1000
+	maxIters = 2000
 )
 
 type MandelbrotServer struct {
@@ -53,7 +52,7 @@ func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.I
 
 	var imgBuffer bytes.Buffer
 
-	img := generateMandelbrot(1500, 750)
+	img := generateMandelbrot(2000, 1000)
 
 	err := png.Encode(&imgBuffer, img)
 	if err != nil {
@@ -70,13 +69,12 @@ func generateMandelbrot(width, height int) image.Image {
 
 	ratio := width / height
 
-	//itersForPixel := make(map[Pixel]int, width*height)
-	itersForPixel := make([][]float64, width)
+	itersForPixel := make([][]int, width)
 	for i := range itersForPixel {
-		itersForPixel[i] = make([]float64, height)
+		itersForPixel[i] = make([]int, height)
 	}
 
-	histogram := NewSafeMap(maxIters)
+	histogram := NewSafeMap(maxIters) // мапа для гистограммы: кол-во итераций-счетчик
 
 	var wg sync.WaitGroup
 
@@ -89,13 +87,13 @@ func generateMandelbrot(width, height int) image.Image {
 				x := ((float64((2 * px)) / float64(width)) - 1) * float64(ratio)
 				y := ((float64((2 * py)) / float64(height)) - 1)
 
-				iters := iteratePoint(x, y)
+				iters := iteratePoint(x, y) // главный алгоритм, возвращает кол-во итераций для ухода в бесконечность на заданных координатах
 
-				itersForPixel[px][py] = iters
+				itersForPixel[px][py] = iters // массив(типо мапа) координаты(как ключ)-итерация(значение)
 
-				if iters < float64(maxIters) {
+				if iters < maxIters {
 					histogram.mx.Lock()
-					histogram.m[int(math.Floor(iters))]++
+					histogram.m[iters]++
 					histogram.mx.Unlock()
 				}
 			}
@@ -105,26 +103,33 @@ func generateMandelbrot(width, height int) image.Image {
 
 	wg.Wait()
 
-	total := 0
-	for _, v := range histogram.m {
-		total += v
-	}
+	// total := 0
+	// for _, v := range histogram.m {
+	// 	total += v
+	// }
 
-	hues := make([]float64, maxIters)
-	h := 0.0
-	for n := range maxIters {
-		h += (float64(histogram.m[n]) / float64(total))
-		hues[n] = 1 - h
-	}
-	hues[len(hues)-1] = h
-
-	for x, column := range itersForPixel {
+	for x, column := range itersForPixel { // цикл по всем уже вычисленным пикселям
 		for y := range column {
 
-			m := itersForPixel[x][y]
-			num := 255 - int(255*linearInterpolation(hues[int(math.Floor(m))], hues[int(math.Ceil(m))], m-float64(math.Floor(m))))
-			color := color.RGBA{uint8(num), uint8(num), uint8(num), 255}
-			img.Set(x, y, color)
+			var finalColor color.Color
+			n := itersForPixel[x][y] // итерация на текущем пикселе
+			switch {                 // секции градиентов палитры
+			case n == 0:
+				finalColor = color.Black // если итераций на пикселе 0 - значит пиксель внутри множества и не раскрашивается(черный)
+			case n < 200:
+				finalColor = color.RGBA{uint8(n), 0, 0, 255}
+			case n < 400:
+				finalColor = color.RGBA{uint8(n - 200 + 50), 0, 0, 255} // рандомная формула для рассчета градиента
+			case n < 600:
+				finalColor = color.RGBA{255, uint8(n - 400 + 50), 0, 255} // попробуй посчитать вручную в калькуляторе, станет понятнее что происходит и откуда такая формула
+			case n < 800:
+				finalColor = color.RGBA{255, uint8(n - 600 + 50), 0, 255} // RGBA имеет 4 значения, последнее - Alpha, всегда 255, RGB - красный, зеленый, синий
+			case n < 1000:
+				finalColor = color.RGBA{255, uint8(n - 800 + 50), 0, 255}
+			default:
+				finalColor = color.RGBA{255, 255, 0, 255}
+			}
+			img.Set(x, y, finalColor) // отрисовка пикселя
 		}
 	}
 
@@ -159,7 +164,7 @@ func highestValue(slice [][]int) int {
 	return max
 }
 
-func iteratePoint(x, y float64) float64 {
+func iteratePoint(x, y float64) int {
 	var z complex128
 	c := complex(x, y)
 
@@ -167,8 +172,7 @@ func iteratePoint(x, y float64) float64 {
 		z = z*z + c
 
 		if cmplx.Abs(z) > 2 {
-			result := float64(n) + 1.0 - math.Log(math.Log2(cmplx.Abs(z)))
-			return result
+			return n
 		}
 	}
 	return 0
