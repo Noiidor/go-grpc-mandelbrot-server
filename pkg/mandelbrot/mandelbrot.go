@@ -141,8 +141,22 @@ func percentageOfMaxIter(iter int) int {
 	return (iter * 100) / maxIters
 }
 
-func linearInterpolation(a, b, t float64) float64 {
-	return a*(1-t) + b*t
+func lerp(a, b, t float64) float64 {
+	return (a * (1.0 - t)) + (b * t)
+}
+
+func lerpColor(a, b color.Color, t float64) color.Color {
+	r1, g1, b1, a1 := a.RGBA()
+	r2, g2, b2, a2 := b.RGBA()
+
+	// Простите
+	resultColor := color.RGBA{
+		uint8(lerp(float64(r1), float64(r2), t)),
+		uint8(lerp(float64(g1), float64(g2), t)),
+		uint8(lerp(float64(b1), float64(b2), t)),
+		uint8(lerp(float64(a1), float64(a2), t))}
+
+	return resultColor
 }
 
 func createRandPalette(colors int) color.Palette {
