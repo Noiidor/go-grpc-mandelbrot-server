@@ -46,8 +46,6 @@ func NewSafeMap(size int) *SafeMap {
 	}
 }
 
-// }
-
 func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.Image, error) {
 
 	var imgBuffer bytes.Buffer
@@ -112,19 +110,22 @@ func generateMandelbrot(width, height int) image.Image {
 		for y := range column {
 
 			var finalColor color.Color
-			n := itersForPixel[x][y] // итерация на текущем пикселе
-			switch {                 // секции градиентов палитры
+			n := itersForPixel[x][y]          // итерация на текущем пикселе
+			percent := percentageOfMaxIter(n) // Каким процентом от макс.предела итераций текущая итерация является
+			switch {                          // секции градиентов палитры
 			case n == 0:
 				finalColor = color.Black // если итераций на пикселе 0 - значит пиксель внутри множества и не раскрашивается(черный)
-			case n < 200:
-				finalColor = color.RGBA{uint8(n), 0, 0, 255}
-			case n < 400:
-				finalColor = color.RGBA{uint8(n - 200 + 50), 0, 0, 255} // рандомная формула для рассчета градиента
-			case n < 600:
+			case 5 > percent:
+				finalColor = color.RGBA{uint8(n * 10), 25, 25, 255}
+			case 10 > percent:
+				finalColor = color.RGBA{uint8(n), 50, 50, 255}
+			case 20 > percent:
+				finalColor = color.RGBA{uint8(n - 200 + 50), 50, 50, 255} // рандомная формула для рассчета градиента
+			case 40 > percent:
 				finalColor = color.RGBA{255, uint8(n - 400 + 50), 0, 255} // попробуй посчитать вручную в калькуляторе, станет понятнее что происходит и откуда такая формула
-			case n < 800:
+			case 65 > percent:
 				finalColor = color.RGBA{255, uint8(n - 600 + 50), 0, 255} // RGBA имеет 4 значения, последнее - Alpha, всегда 255, RGB - красный, зеленый, синий
-			case n < 1000:
+			case 85 > percent:
 				finalColor = color.RGBA{255, uint8(n - 800 + 50), 0, 255}
 			default:
 				finalColor = color.RGBA{255, 255, 0, 255}
@@ -134,6 +135,10 @@ func generateMandelbrot(width, height int) image.Image {
 	}
 
 	return img
+}
+
+func percentageOfMaxIter(iter int) int {
+	return (iter * 100) / maxIters
 }
 
 func linearInterpolation(a, b, t float64) float64 {
