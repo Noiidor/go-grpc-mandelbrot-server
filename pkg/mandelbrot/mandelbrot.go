@@ -18,7 +18,9 @@ import (
 )
 
 var (
-	maxIters = 2000
+	maxIters         = 4000
+	thresholdIters   = 4000
+	regionPercentage = 1
 )
 
 type MandelbrotServer struct {
@@ -34,16 +36,9 @@ type SafeMap struct {
 	mx sync.Mutex
 }
 
-func NewSafeMap(size int) *SafeMap {
-	if size == 0 {
-		return &SafeMap{
-			m: make(map[int]int),
-		}
-	} else {
-		return &SafeMap{
-			m: make(map[int]int, size),
-		}
-	}
+type ColorRegion struct {
+	startIter  int
+	startColor color.RGBA
 }
 
 func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.Image, error) {
@@ -72,7 +67,7 @@ func generateMandelbrot(width, height int) image.Image {
 		itersForPixel[i] = make([]int, height)
 	}
 
-	histogram := NewSafeMap(maxIters) // мапа для гистограммы: кол-во итераций-счетчик
+	histogram := &SafeMap{m: make(map[int]int, maxIters)} // мапа для гистограммы: кол-во итераций-счетчик
 
 	var wg sync.WaitGroup
 
@@ -105,56 +100,111 @@ func generateMandelbrot(width, height int) image.Image {
 	// for _, v := range histogram.m {
 	// 	total += v
 	// }
-
-	for x, column := range itersForPixel { // цикл по всем уже вычисленным пикселям
-		for y := range column {
-
-			var finalColor color.Color
-			n := itersForPixel[x][y]          // итерация на текущем пикселе
-			percent := percentageOfMaxIter(n) // Каким процентом от макс.предела итераций текущая итерация является
-			switch {                          // секции градиентов палитры
-			case n == 0:
-				finalColor = color.Black // если итераций на пикселе 0 - значит пиксель внутри множества и не раскрашивается(черный)
-			case 5 > percent:
-				finalColor = color.RGBA{uint8(n * 10), 25, 25, 255}
-			case 10 > percent:
-				finalColor = color.RGBA{uint8(n), 50, 50, 255}
-			case 20 > percent:
-				finalColor = color.RGBA{uint8(n - 200 + 50), 50, 50, 255} // рандомная формула для рассчета градиента
-			case 40 > percent:
-				finalColor = color.RGBA{255, uint8(n - 400 + 50), 0, 255} // попробуй посчитать вручную в калькуляторе, станет понятнее что происходит и откуда такая формула
-			case 65 > percent:
-				finalColor = color.RGBA{255, uint8(n - 600 + 50), 0, 255} // RGBA имеет 4 значения, последнее - Alpha, всегда 255, RGB - красный, зеленый, синий
-			case 85 > percent:
-				finalColor = color.RGBA{255, uint8(n - 800 + 50), 0, 255}
-			default:
-				finalColor = color.RGBA{255, 255, 0, 255}
-			}
-			img.Set(x, y, finalColor) // отрисовка пикселя
-		}
-	}
+	colorPlottedPixels(itersForPixel, img)
 
 	return img
 }
 
-func percentageOfMaxIter(iter int) int {
-	return (iter * 100) / maxIters
+func colorPlottedPixels(pixelsIterations [][]int, img *image.RGBA) {
+
+	itersToColor := 0
+	if maxIters < thresholdIters {
+		itersToColor = maxIters
+	} else {
+		itersToColor = thresholdIters
+	}
+
+	itersPerRegion := numOfPercentage(itersToColor, regionPercentage)
+	numOfRegions := itersToColor / itersPerRegion
+
+	bands := make([]ColorRegion, numOfRegions)
+
+	for i := range numOfRegions {
+		startIter := itersToColor - (itersPerRegion * (i + 1))
+		if i == numOfRegions-1 {
+			if startIter != 0 {
+				startIter = 0
+			}
+		}
+
+		region := ColorRegion{
+			startIter:  startIter,
+			startColor: getRandomRGBAColor(),
+		}
+		bands[i] = region
+	}
+
+	for x, pixelsColumn := range pixelsIterations { // цикл по всем уже вычисленным пикселям
+		for y, n := range pixelsColumn {
+
+			var currentColor color.Color
+
+			if n == maxIters {
+				currentColor = color.Black
+			} else {
+				for i, region := range bands {
+					if n >= region.startIter && n <= region.startIter+itersPerRegion {
+
+						ratio := ratioBetweenNums(region.startIter, region.startIter+itersPerRegion, n)
+						var endColor color.RGBA
+						if i-1 < 0 {
+							endColor = color.RGBA{0, 0, 0, 0}
+						} else {
+							endColor = bands[i-1].startColor
+						}
+						currentColor = lerpColor(region.startColor, endColor, ratio)
+						break
+
+					} else {
+						continue
+					}
+				}
+				if currentColor == nil {
+					currentColor = color.Black
+				}
+			}
+
+			img.Set(x, y, currentColor)
+		}
+	}
+
+}
+
+func ratioBetweenNums(a, b, x int) float64 {
+	return 1.0 - (float64(b)-float64(x))/(float64(b)-float64(a))
+}
+
+func getRandomRGBAColor() color.RGBA {
+	return color.RGBA{uint8(rand.Intn(255)), uint8(rand.Intn(255)), uint8(rand.Intn(255)), 255}
+}
+
+func numOfPercentage(numFrom, percentage int) int {
+	return (percentage * numFrom) / 100
+}
+
+func percentageOfNum(numFrom, number int) int {
+	return (number * 100) / numFrom
 }
 
 func lerp(a, b, t float64) float64 {
 	return (a * (1.0 - t)) + (b * t)
 }
 
-func lerpColor(a, b color.Color, t float64) color.Color {
-	r1, g1, b1, a1 := a.RGBA()
-	r2, g2, b2, a2 := b.RGBA()
+func lerpColor(a, b color.RGBA, t float64) color.Color {
+
+	if t == 0 {
+		return a
+	}
+	if t == 1.0 {
+		return b
+	}
 
 	// Простите
 	resultColor := color.RGBA{
-		uint8(lerp(float64(r1), float64(r2), t)),
-		uint8(lerp(float64(g1), float64(g2), t)),
-		uint8(lerp(float64(b1), float64(b2), t)),
-		uint8(lerp(float64(a1), float64(a2), t))}
+		uint8(lerp(float64(a.R), float64(b.R), t)),
+		uint8(lerp(float64(a.G), float64(b.R), t)),
+		uint8(lerp(float64(a.B), float64(b.R), t)),
+		uint8(lerp(float64(a.A), float64(b.A), t))}
 
 	return resultColor
 }
@@ -194,5 +244,5 @@ func iteratePoint(x, y float64) int {
 			return n
 		}
 	}
-	return 0
+	return maxIters
 }
