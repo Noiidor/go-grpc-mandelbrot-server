@@ -18,7 +18,9 @@ import (
 )
 
 var (
-	maxIters         = 4000
+	width            = 2000
+	height           = 1000
+	maxIters         = 1000
 	thresholdIters   = 4000
 	regionPercentage = 1
 )
@@ -45,7 +47,7 @@ func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.I
 
 	var imgBuffer bytes.Buffer
 
-	img := generateMandelbrot(2000, 1000)
+	img := generateMandelbrot(width, height)
 
 	err := png.Encode(&imgBuffer, img)
 	if err != nil {
@@ -202,8 +204,8 @@ func lerpColor(a, b color.RGBA, t float64) color.Color {
 	// Простите
 	resultColor := color.RGBA{
 		uint8(lerp(float64(a.R), float64(b.R), t)),
-		uint8(lerp(float64(a.G), float64(b.R), t)),
-		uint8(lerp(float64(a.B), float64(b.R), t)),
+		uint8(lerp(float64(a.G), float64(b.G), t)),
+		uint8(lerp(float64(a.B), float64(b.B), t)),
 		uint8(lerp(float64(a.A), float64(b.A), t))}
 
 	return resultColor
