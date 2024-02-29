@@ -29,17 +29,22 @@ func NewMandelbrotServer() *MandelbrotServer {
 	return &MandelbrotServer{}
 }
 
-type SafeMap struct {
-	m  map[int]int
-	mx sync.Mutex
-}
-
 type ColorRegion struct {
 	startIter  int
 	startColor color.RGBA
 }
 
+
+var GradientSetting = make([]ColorRegion, 0)
+
 func (MandelbrotServer) GetImage(ctx context.Context, settings *pb.MandelbrotSettings) (*pb.Image, error) {
+
+	if len(GradientSetting) == 0 {
+	}else{
+
+	}
+
+
 
 	var imgBuffer bytes.Buffer
 
@@ -65,8 +70,6 @@ func generateMandelbrot(width, height, zoom int, centerX, centerY float64) image
 		itersForPixel[i] = make([]int, height)
 	}
 
-	histogram := &SafeMap{m: make(map[int]int, maxIters)} // мапа для гистограммы: кол-во итераций-счетчик
-
 	var wg sync.WaitGroup
 
 	zoomRatio := 1 / float64(zoom)
@@ -76,30 +79,18 @@ func generateMandelbrot(width, height, zoom int, centerX, centerY float64) image
 		go func(px int) {
 			defer wg.Done()
 			for py := range height {
-
 				x := ((((float64(px)/float64(width))-1)*float64(ratio) + 0.5) * zoomRatio) + (centerX)
 				y := ((((float64(py) / float64(height)) - 1) + 0.5) * zoomRatio) + (centerY)
 
-				iters := iteratePoint(x, y) // главный алгоритм, возвращает кол-во итераций для ухода в бесконечность на заданных координатах
+				iters := iteratePoint(x, y)
 
-				itersForPixel[px][py] = iters // массив(типо мапа) координаты(как ключ)-итерация(значение)
-
-				if iters < maxIters {
-					histogram.mx.Lock()
-					histogram.m[iters]++
-					histogram.mx.Unlock()
-				}
+				itersForPixel[px][py] = iters
 			}
-
 		}(px)
 	}
 
 	wg.Wait()
 
-	// total := 0
-	// for _, v := range histogram.m {
-	// 	total += v
-	// }
 	colorPlottedPixels(itersForPixel, img)
 
 	return img
