@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option go_package= "go-grpc-mandlebrot-server/internal/proto";
+
+service Mandelbrot {
+  rpc GetImage (MandelbrotSettings) returns (Image);
+}
+
+message Image {
+  bytes imageContent = 1;
+}
+
+message MandelbrotSettings {
+  uint32 width = 1;
+  uint32 height = 2;
+  int32 zoom = 3;
+  float centerX = 4;
+  float centerY = 5;
+}

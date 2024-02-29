@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MandelbrotClient interface {
-	GetImage(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Image, error)
+	GetImage(ctx context.Context, in *MandelbrotSettings, opts ...grpc.CallOption) (*Image, error)
 }
 
 type mandelbrotClient struct {
@@ -34,7 +33,7 @@ func NewMandelbrotClient(cc grpc.ClientConnInterface) MandelbrotClient {
 	return &mandelbrotClient{cc}
 }
 
-func (c *mandelbrotClient) GetImage(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Image, error) {
+func (c *mandelbrotClient) GetImage(ctx context.Context, in *MandelbrotSettings, opts ...grpc.CallOption) (*Image, error) {
 	out := new(Image)
 	err := c.cc.Invoke(ctx, "/Mandelbrot/GetImage", in, out, opts...)
 	if err != nil {
@@ -47,7 +46,7 @@ func (c *mandelbrotClient) GetImage(ctx context.Context, in *emptypb.Empty, opts
 // All implementations must embed UnimplementedMandelbrotServer
 // for forward compatibility
 type MandelbrotServer interface {
-	GetImage(context.Context, *emptypb.Empty) (*Image, error)
+	GetImage(context.Context, *MandelbrotSettings) (*Image, error)
 	mustEmbedUnimplementedMandelbrotServer()
 }
 
@@ -55,7 +54,7 @@ type MandelbrotServer interface {
 type UnimplementedMandelbrotServer struct {
 }
 
-func (UnimplementedMandelbrotServer) GetImage(context.Context, *emptypb.Empty) (*Image, error) {
+func (UnimplementedMandelbrotServer) GetImage(context.Context, *MandelbrotSettings) (*Image, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetImage not implemented")
 }
 func (UnimplementedMandelbrotServer) mustEmbedUnimplementedMandelbrotServer() {}
@@ -72,7 +71,7 @@ func RegisterMandelbrotServer(s grpc.ServiceRegistrar, srv MandelbrotServer) {
 }
 
 func _Mandelbrot_GetImage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
+	in := new(MandelbrotSettings)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -84,7 +83,7 @@ func _Mandelbrot_GetImage_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/Mandelbrot/GetImage",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MandelbrotServer).GetImage(ctx, req.(*emptypb.Empty))
+		return srv.(MandelbrotServer).GetImage(ctx, req.(*MandelbrotSettings))
 	}
 	return interceptor(ctx, in, info, handler)
 }

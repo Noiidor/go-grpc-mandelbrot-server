@@ -9,19 +9,15 @@ import (
 	"image/png"
 	"log"
 	"math/cmplx"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 
 	pb "go-grpc-mandlebrot-server/internal/proto"
-
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 var (
-	width            = 2000
-	height           = 1000
-	maxIters         = 1000
-	thresholdIters   = 4000
+	maxIters         = 500
+	thresholdIters   = 1000
 	regionPercentage = 1
 )
 
@@ -43,11 +39,11 @@ type ColorRegion struct {
 	startColor color.RGBA
 }
 
-func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.Image, error) {
+func (MandelbrotServer) GetImage(ctx context.Context, settings *pb.MandelbrotSettings) (*pb.Image, error) {
 
 	var imgBuffer bytes.Buffer
 
-	img := generateMandelbrot(width, height)
+	img := generateMandelbrot(int(settings.Width), int(settings.Height), int(settings.Zoom), float64(settings.CenterX), float64(settings.CenterY))
 
 	err := png.Encode(&imgBuffer, img)
 	if err != nil {
@@ -58,7 +54,7 @@ func (MandelbrotServer) GetImage(ctx context.Context, emt *emptypb.Empty) (*pb.I
 	return &pb.Image{ImageContent: imgBuffer.Bytes()}, nil
 }
 
-func generateMandelbrot(width, height int) image.Image {
+func generateMandelbrot(width, height, zoom int, centerX, centerY float64) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{0, 0}, draw.Src)
 
@@ -73,14 +69,16 @@ func generateMandelbrot(width, height int) image.Image {
 
 	var wg sync.WaitGroup
 
+	zoomRatio := 1 / float64(zoom)
+
 	for px := range width {
 		wg.Add(1)
 		go func(px int) {
 			defer wg.Done()
 			for py := range height {
 
-				x := ((float64((2 * px)) / float64(width)) - 1) * float64(ratio)
-				y := ((float64((2 * py)) / float64(height)) - 1)
+				x := ((((float64(px)/float64(width))-1)*float64(ratio) + 0.5) * zoomRatio) + (centerX)
+				y := ((((float64(py) / float64(height)) - 1) + 0.5) * zoomRatio) + (centerY)
 
 				iters := iteratePoint(x, y) // главный алгоритм, возвращает кол-во итераций для ухода в бесконечность на заданных координатах
 
@@ -177,7 +175,12 @@ func ratioBetweenNums(a, b, x int) float64 {
 }
 
 func getRandomRGBAColor() color.RGBA {
-	return color.RGBA{uint8(rand.Intn(255)), uint8(rand.Intn(255)), uint8(rand.Intn(255)), 255}
+	min := 50
+	max := 255
+	return color.RGBA{
+		uint8(rand.IntN(max-min) + min),
+		uint8(rand.IntN(max-min) + min),
+		uint8(rand.IntN(max-min) + min), 255}
 }
 
 func numOfPercentage(numFrom, percentage int) int {
@@ -215,7 +218,7 @@ func createRandPalette(colors int) color.Palette {
 	palette := make(color.Palette, colors)
 
 	for n := range colors {
-		color := color.RGBA{uint8(rand.Intn(255)), uint8(rand.Intn(255)), uint8(rand.Intn(255)), 255}
+		color := getRandomRGBAColor()
 		palette[n] = color
 	}
 
