@@ -1,18 +1,12 @@
 package mandelbrot
 
 import (
-	"bytes"
-	"context"
 	"image"
 	"image/color"
 	"image/draw"
-	"image/png"
-	"log"
 	"math/cmplx"
 	"math/rand/v2"
 	"sync"
-
-	pb "go-grpc-mandlebrot-server/internal/proto"
 )
 
 var (
@@ -21,45 +15,12 @@ var (
 	regionPercentage = 1
 )
 
-type MandelbrotServer struct {
-	pb.UnimplementedMandelbrotServer
-}
-
-func NewMandelbrotServer() *MandelbrotServer {
-	return &MandelbrotServer{}
-}
-
 type ColorRegion struct {
 	startIter  int
 	startColor color.RGBA
 }
 
-
-var GradientSetting = make([]ColorRegion, 0)
-
-func (MandelbrotServer) GetImage(ctx context.Context, settings *pb.MandelbrotSettings) (*pb.Image, error) {
-
-	if len(GradientSetting) == 0 {
-	}else{
-
-	}
-
-
-
-	var imgBuffer bytes.Buffer
-
-	img := generateMandelbrot(int(settings.Width), int(settings.Height), int(settings.Zoom), float64(settings.CenterX), float64(settings.CenterY))
-
-	err := png.Encode(&imgBuffer, img)
-	if err != nil {
-		log.Fatalf("Error while encoding image: %v", err)
-		return nil, err
-	}
-
-	return &pb.Image{ImageContent: imgBuffer.Bytes()}, nil
-}
-
-func generateMandelbrot(width, height, zoom int, centerX, centerY float64) image.Image {
+func GenerateMandelbrot(width, height, zoom int, centerX, centerY float64) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{0, 0}, draw.Src)
 

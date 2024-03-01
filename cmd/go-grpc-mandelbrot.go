@@ -4,7 +4,7 @@ import (
 	"go-grpc-mandlebrot-server/internal/config"
 	"go-grpc-mandlebrot-server/internal/proto"
 	"go-grpc-mandlebrot-server/internal/server"
-	"go-grpc-mandlebrot-server/pkg/mandelbrot"
+	"go-grpc-mandlebrot-server/pkg/service"
 	"go-grpc-mandlebrot-server/pkg/signal"
 	"log"
 
@@ -28,7 +28,7 @@ func main() {
 
 	grpcServer := server.NewGRPCServer(network, address)
 
-	mandelbrotImgServer := mandelbrot.NewMandelbrotServer()
+	mandelbrotImgServer := service.NewMandelbrotServer()
 
 	proto.RegisterMandelbrotServer(grpcServer.GetServer().(*grpc.Server), mandelbrotImgServer)
 	log.Printf("gRPC server listen on server %s", address)
